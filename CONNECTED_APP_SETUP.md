@@ -5,13 +5,12 @@ This guide walks you through creating a Salesforce Connected App for the MCP Dat
 ## Prerequisites
 
 - Access to a Salesforce org with appropriate permissions
-- Admin or System Administrator profile
 
 ## Step-by-Step Setup
 
 ### 1. Enable External Client Apps
 
-1. Login to Salesforce → Setup → Search for "External Client Apps"
+1. Login to Salesforce → Setup → Search for "External Client Apps" using Quick Find
 2. Under "External Client Apps" on the left pane, choose 'Settings'
 3. Enable the following options:
    - "Allow access to External Client App consumer secrets via REST API"
