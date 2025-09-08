@@ -7,6 +7,9 @@ import requests
 import sys
 import os
 from rfc3986 import builder as uri_builder
+import secrets
+import hashlib
+import base64
 
 import http.server
 import time
@@ -31,7 +34,6 @@ def validate_required_env_vars():
 required_env = validate_required_env_vars()
 CLIENT_ID = required_env['SF_CLIENT_ID']
 CLIENT_SECRET = required_env['SF_CLIENT_SECRET']
-redirect_uri = "http://localhost:55555/Callback"
 
 
 def delayed_server_shutdown(*, target, sleep_for: float = 0.1):  # pragma: no cover
@@ -46,7 +48,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
   # pragma: no cover
     def do_GET(self):  # noqa: N802
         parts = urlparse(self.path)
-        if parts.path != "/Callback":
+        if parts.path.lower() != "/callback":
             self.send_error(404, "Not Found", "Not Found")
             return
 
@@ -67,9 +69,25 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         ).start()
 
 
+def generate_pkce_pair():
+    """Generate PKCE code verifier and challenge for OAuth flow"""
+    # Generate a random code_verifier (43-128 characters)
+    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
+
+    # Generate code_challenge as SHA256 hash of verifier
+    challenge = hashlib.sha256(code_verifier.encode('utf-8')).digest()
+    code_challenge = base64.urlsafe_b64encode(challenge).decode('utf-8').rstrip('=')
+
+    return code_verifier, code_challenge
+
+
 def run_flow(scopes: list[str], login_root: str):
     login_url = f"https://{login_root}/services/oauth2/authorize"
     token_exchange_url = f"https://{login_root}/services/oauth2/token"
+    redirect_uri = sf_org['redirect_uri']
+
+    # Generate PKCE pair
+    code_verifier, code_challenge = generate_pkce_pair()
 
     browser_uri: str = (
         uri_builder.URIBuilder(path=login_url)
@@ -80,13 +98,20 @@ def run_flow(scopes: list[str], login_root: str):
                 "response_type": "code",
                 "scope": " ".join(scopes),
                 "prompt": "login",
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
             }
         )
         .finalize()
         .unsplit()
     )
 
-    server = http.server.HTTPServer(("localhost", 55556), RequestHandler)
+    # Extract port from redirect_uri
+    parsed_redirect = urlparse(redirect_uri)
+    port = parsed_redirect.port
+
+    print(f"Starting server on port {port}")
+    server = http.server.HTTPServer(("localhost", port), RequestHandler)
     server.allow_reuse_address = True
     t = Thread(target=server.serve_forever, daemon=True)
     t.start()
@@ -96,7 +121,16 @@ def run_flow(scopes: list[str], login_root: str):
         t.join(10)
 
     oauth_result_args = server.oauth_result
-    code = oauth_result_args["code"]
+
+    if "code" not in oauth_result_args:
+        error_msg = "OAuth authentication failed - no authorization code received"
+        if "error" in oauth_result_args:
+            error_msg += f". Error: {oauth_result_args['error'][0]}"
+            if "error_description" in oauth_result_args:
+                error_msg += f" - {oauth_result_args['error_description'][0]}"
+        raise Exception(error_msg)
+
+    code = oauth_result_args["code"][0]  # OAuth params come as lists
 
     response = requests.post(
         token_exchange_url,
@@ -106,6 +140,7 @@ def run_flow(scopes: list[str], login_root: str):
             "client_id": CLIENT_ID,
             "client_secret": CLIENT_SECRET,
             "redirect_uri": redirect_uri,
+            "code_verifier": code_verifier,  # Include the PKCE code verifier
         },
         headers={"Accept": "application/json"},
     )
@@ -218,7 +253,8 @@ def suggest_table_and_fields(
 
 sf_org: dict = {
     'default_list_table_filter': os.getenv('DEFAULT_LIST_TABLE_FILTER', '%'),
-    'login_root': os.getenv('SF_LOGIN_URL', 'login.salesforce.com')
+    'login_root': os.getenv('SF_LOGIN_URL', 'login.salesforce.com'),
+    'redirect_uri': os.getenv('CALLBACK_URL', 'http://localhost:55556/Callback')
 }
 
 if __name__ == "__main__":

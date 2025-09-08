@@ -51,9 +51,12 @@ The server requires the following environment variables:
 - `SF_CLIENT_ID`: Your Salesforce OAuth client ID
 - `SF_CLIENT_SECRET`: Your Salesforce OAuth client secret
 
+See [Connected App Setup Guide](CONNECTED_APP_SETUP.md) for instructions on how to obtain these credentials.
+
 ### Optional Environment Variables
 
 - `SF_LOGIN_URL`: The Salesforce login URL (default: 'login.salesforce.com')
+- `CALLBACK_URL`: The OAuth callback URL for the authentication flow (default: 'http://localhost:5556/Callback'). This URL must be registered in your Salesforce connected app settings. See [Connected App Setup Guide](CONNECTED_APP_SETUP.md) for detailed instructions.
 - `DEFAULT_LIST_TABLE_FILTER`: Filter pattern for listing tables (default: '%'). You can use this to filter for example to known "curated" tables that all share the same prefix. You can use the SQL Like syntax to express the filters.
 
 ## Available Tools
