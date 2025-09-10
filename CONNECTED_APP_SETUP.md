@@ -65,7 +65,7 @@ To view the Client ID and Client Secret of your connected app:
 
 ## Important Notes
 
-- The callback URL you configure in the connected app must match the `CALLBACK_URL` environment variable
+- The callback URL you configure in the connected app must match the `SF_CALLBACK_URL` environment variable
 - Keep your Client ID and Secret secure and never commit it to version control
 
 ## Troubleshooting
