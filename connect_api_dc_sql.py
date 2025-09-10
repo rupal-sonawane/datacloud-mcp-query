@@ -17,21 +17,15 @@ def _handle_error_response(response: requests.Response):
         message = response.text
         try:
             payload = json.loads(response.text)
-            # Connected API error format: list with first element containing JSON string in "message"
+            # Connect API error format: list with first element containing JSON string in "message"
             if isinstance(payload, list) and len(payload) > 0:
                 structured_message = payload[0]
                 try:
-                    errors_details_raw = structured_message.get("message", "")
-                    details = json.loads(errors_details_raw) if errors_details_raw else {}
-                    primary = details.get("errorMessage")
-                    detail = details.get("customerDetail")
-                    hint = details.get("customerHint")
-                    if primary:
-                        message = primary
-                        if detail:
-                            message += "\n" + "DETAIL:" + detail
-                        if hint:
-                            message += "\n" + "HINT:" + hint
+                    errors_details_json = structured_message.get("message", "")
+                    details = json.loads(
+                        errors_details_json) if errors_details_json else None
+                    if details:
+                        message = errors_details_json
                 except Exception:
                     pass
         except Exception:
@@ -50,7 +44,7 @@ def run_query(
     sql: str,
     dataspace: str = "default",
     workload_name: str | None = None,
-    row_limit: int = 100000,
+    pagination_batch_size: int = 100000,
 ) -> Dict[str, Union[List, str]]:
     """
     Execute a SQL query using the Data Cloud Query Connect API, handling long-running queries
@@ -82,7 +76,7 @@ def run_query(
     _handle_error_response(submit_response)
 
     submit_payload = submit_response.json()
-    status_obj = submit_payload.get("status", {}) or {}
+    status_obj = submit_payload.get("status", {})
     query_id = status_obj.get("queryId") or submit_payload.get("queryId")
     if not query_id:
         raise Exception(500, "MissingQueryId",
@@ -92,13 +86,11 @@ def run_query(
     rows: list = submit_payload.get("data", []) or []
     metadata = submit_payload.get("metadata", [])
     completion = status_obj.get("completionStatus")
-    progress = status_obj.get("progress")
-    total_row_count = int(status_obj.get("rowCount")) if status_obj.get(
-        "rowCount") is not None else None
+    total_row_count = int(status_obj.get("rowCount"))
 
     # Step 2: poll for completion when needed (long-polling via waitTimeMs)
     poll_count = 0
-    while (completion != "Finished") and (completion != "ResultsProduced"):
+    while completion not in ["Finished", "ResultsProduced"]:
         poll_count += 1
         poll_url = f"{url_base}/{query_id}"
         logger.debug(
@@ -117,15 +109,13 @@ def run_query(
         _handle_error_response(poll_response)
         poll_payload = poll_response.json()
         completion = poll_payload.get("completionStatus")
-        progress = poll_payload.get("progress")
-        total_row_count = int(poll_payload.get("rowCount")) if poll_payload.get(
-            "rowCount") is not None else None
+        total_row_count = int(poll_payload.get("rowCount"))
 
     # Step 3: retrieve remaining rows via pagination
-    while total_row_count is not None and len(rows) < total_row_count:
+    while len(rows) < total_row_count:
         rows_params = dict(common_params)
         rows_params.update({
-            "rowLimit": row_limit,
+            "rowLimit": pagination_batch_size,
             "offset": len(rows),
             "omitSchema": "true",
         })

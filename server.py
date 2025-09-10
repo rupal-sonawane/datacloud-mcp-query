@@ -54,7 +54,6 @@ def run_focus(sql: str, parameters: list[dict] = []):
                 ", Hint: " + details["customerHint"]
         except ValueError as e:
             logger.error(f"Failed to parse error response: {e}")
-            return False
         raise Exception(r.status_code, r.reason, message)
     else:
         result = r.json()
@@ -78,8 +77,6 @@ def list_tables() -> list[str]:
     result = run_query(oauth_session, sql)
     # Extract data from the result dictionary
     data = result.get("data", [])
-    if data == "(empty)":
-        return []
     return [x[0] for x in data]
 
 

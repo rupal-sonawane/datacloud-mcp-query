@@ -34,7 +34,7 @@ class OAuthConfig:
         client_secret = os.getenv("SF_CLIENT_SECRET")
         login_root = os.getenv("SF_LOGIN_URL", "login.salesforce.com")
         redirect_uri = os.getenv(
-            "CALLBACK_URL", "http://localhost:55556/Callback")
+            "SF_CALLBACK_URL", "http://localhost:55556/Callback")
 
         missing = [name for name, val in {
             "SF_CLIENT_ID": client_id,
@@ -46,14 +46,6 @@ class OAuthConfig:
             sys.exit(1)
 
         return cls(client_id=client_id, client_secret=client_secret, login_root=login_root, redirect_uri=redirect_uri)
-
-
-def _delayed_server_shutdown(*, target, sleep_for: float = 0.1):  # pragma: no cover
-    def closure(*args, **kwargs):
-        time.sleep(sleep_for)
-        target(*args, **kwargs)
-
-    return closure
 
 
 class _RequestHandler(http.server.BaseHTTPRequestHandler):  # pragma: no cover
@@ -74,10 +66,6 @@ class _RequestHandler(http.server.BaseHTTPRequestHandler):  # pragma: no cover
         self.send_header("Content-Length", str(len(response_content)))
         self.end_headers()
         self.wfile.write(response_content)
-
-        Thread(
-            target=_delayed_server_shutdown(target=self.server.shutdown), daemon=True
-        ).start()
 
 
 def _generate_pkce_pair() -> Tuple[str, str]:
@@ -133,7 +121,7 @@ class OAuthSession:
         logger.debug(f"Starting OAuth callback server on localhost:{port}")
         server = http.server.HTTPServer(("localhost", port), _RequestHandler)
         server.allow_reuse_address = True
-        t = Thread(target=server.serve_forever, daemon=True)
+        t = Thread(target=server.handle_request, daemon=True)
         t.start()
 
         logger.info(f"Opening browser for OAuth authorization")
