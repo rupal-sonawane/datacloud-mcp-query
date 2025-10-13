@@ -41,7 +41,7 @@ def run_focus(sql: str, parameters: list[dict] = []):
     r = requests.post(focus_url,
                       json=request_data,
                       headers={'Authorization': 'Bearer ' + token},
-                      timeout=30)
+                      timeout=120)
 
     logger.info(f"Focus API response: status={r.status_code}, elapsed={r.elapsed.total_seconds():.2f}s")
 
