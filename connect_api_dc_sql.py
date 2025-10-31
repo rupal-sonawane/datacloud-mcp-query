@@ -43,7 +43,7 @@ def run_query(
     oauth_session: OAuthSession,
     sql: str,
     dataspace: str = "default",
-    workload_name: str | None = None,
+    workload_name: str | None = "oss-datacloud-mcp-query",
     pagination_batch_size: int = 100000,
 ) -> Dict[str, Union[List, str]]:
     """
